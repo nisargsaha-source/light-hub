@@ -3,15 +3,18 @@
 #include <zephyr/kernel.h>
 #include <zephyr/drivers/uart.h>
 #include <zephyr/logging/log.h>
+#include "packet.h"
+#include "protocol.h"
 
 #include "bulb_cmd.h"
 #include "bulb_mgr.h"
-#include "parser.h"
-#include "uart_rx.h"
+
+#include "uart_link.h"
+
+#define PKT_RX_TIMEOUT_MS 100
 
 LOG_MODULE_REGISTER(uart_rx, LOG_LEVEL_INF);
 
-#define LINE_MAX 64
 
 /* DEVICE_DT_GET(node_id): pointer to a device's driver instance from its devicetree node.
  * DT_CHOSEN(zephyr_console) means "the node devicetree has chosen as the console". */
@@ -44,58 +47,53 @@ static void uart_receive(const struct device *dev, void *user_data)
     }
 }
 
-/* RX thread: turns the byte stream from the ISR into complete lines */
+/* RX thread: turns the byte stream from the ISR into packets,
+ * hands complete packets to the protocol handler, sends responses */
 static void rx_thread(void *p1, void *p2, void *p3)
 {
+    struct pkt_rx rx;
+    uint8_t resp[PKT_MAX_LEN];//response packet
+    uint8_t byte;
+
     ARG_UNUSED(p1);
     ARG_UNUSED(p2);
     ARG_UNUSED(p3);
 
-    char line[LINE_MAX];
-    size_t len = 0;
-    bool overflow = false;
-    uint8_t byte;
+    pkt_rx_reset(&rx);
 
     while (1) {
-        /* Sleep until the ISR queues a byte */
-        k_msgq_get(&rx_q, &byte, K_FOREVER);
+        /* Idle: wait forever. Mid-packet: give up after 100 ms */
+        k_timeout_t timeout = (rx.state == PKT_WAIT_MAGIC)
+                              ? K_FOREVER
+                              : K_MSEC(PKT_RX_TIMEOUT_MS);
 
-        /* Enter key: end of line */
-        if (byte == '\r' || byte == '\n') {
-            printk("\n");
-
-            if (overflow) {
-                LOG_WRN("Line too long, discarded");
-            } else if (len > 0) {
-                line[len] = '\0'; /* terminate the C string */
-                LOG_DBG("Got line: %s", line);
-
-                struct bulb_cmd cmd;
-
-                if (parse_bulb_cmd(line, &cmd) == 0) {
-                    k_msgq_put(&cmd_q, &cmd, K_FOREVER);
-                } else {
-                    LOG_WRN("Invalid command. Format: <bulb> <r> <g> <b>, each 0-255");
-                }
-            }
-
-            /* Empty lines (len == 0) are ignored, e.g. the \n after a \r */
-            len = 0;
-            overflow = false;
+        if (k_msgq_get(&rx_q, &byte, timeout) != 0) {
+            LOG_WRN("Packet timed out, resyncing");
+            pkt_rx_reset(&rx);
             continue;
         }
 
-        /* Echo the character so the user can see what they type */
-        printk("%c", byte);
-
-        /* Leave room for the '\0' terminator */
-        if (len < LINE_MAX - 1) {
-            line[len++] = byte;
-        } else {
-            overflow = true; /* keep discarding until Enter */
+        switch (pkt_rx_feed(&rx, byte)) { //byte gotten from rx_q, which is then fed to rx
+        case PKT_RX_DONE: {
+            size_t n = proto_handle(&rx, resp);//response packet got build
+            if (n > 0) {
+                uart_send(resp, n);
+            }
+            break;
+        }
+        case PKT_RX_BAD_CRC:
+            LOG_WRN("Bad CRC, packet dropped");
+            break;
+        case PKT_RX_BAD_LENGTH:
+            LOG_WRN("Length over %d, packet dropped", PKT_MAX_PAYLOAD);
+            break;
+        case PKT_RX_INCOMPLETE:
+        default:
+            break;
         }
     }
 }
+
 
 /* 1KB stack, priority 5: runs ahead of bulb_mgr_thread (priority 7) */
 K_THREAD_DEFINE(rx_id, 1024, rx_thread, NULL, NULL, NULL, 5, 0, 0);
@@ -115,4 +113,11 @@ int uart_rx_init(void)
 
     uart_irq_rx_enable(uart);
     return 0;
+}
+
+void uart_send(const uint8_t *data, size_t len){
+    for(size_t i=0; i<len; i++){
+        uart_poll_out(uart, data[i]);
+    }
+
 }

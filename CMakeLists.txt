@@ -13,6 +13,7 @@ project(light_hub)
 target_sources(app PRIVATE
     src/main.c
     src/bulb_mgr.c
-    src/parser.c
-    src/uart_rx.c
+    src/packet.c
+    src/uart_link.c
+    src/protocol.c
 )

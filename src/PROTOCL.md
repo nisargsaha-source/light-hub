@@ -20,7 +20,7 @@ Header = 6 bytes. Smallest packet = 8 bytes (no payload). Largest = 40 bytes.
 
 ## CRC
 - Algorithm: CRC-16/CCITT-FALSE: polynomial 0x1021, initial value 0xFFFF, not reflected, no final XOR. Check value for “123456789” is 0x29B1. Implemented with Zephyr’s crc16_itu_t(0xFFFF, data, len)
-- Covers: every byte from `version` through the end of `payload`
+- Covers: every byte from `maic` through the end of `payload`
   (excludes `magic` and the CRC itself).
 
 ## Message types
@@ -43,7 +43,7 @@ Responses always reuse the request's `seq`. Hub-to-host types have the high bit 
 | 0x02 | UNKNOWN_TYPE  | Message type not recognized |
 | 0x03 | BAD_LENGTH    | Length doesn't match what this type expects |
 | 0x04 | INVALID_BULB  | Bulb ID out of range (valid: 0–7) |
-
+| 0x05 | BUSY_CMD_QUEUE| command queue full, try again |   
 
 ## Validation rules (receiver)
 Checked in this order:
@@ -64,7 +64,7 @@ Checked in this order:
 ```
 AA  01  01  07  04 00  02 FF 00 00  CC CC
 |   |   |   |   |      |            |
-|   |   |   |   |      |            CRC (computed in Lesson 6)
+|   |   |   |   |      |            CRC 
 |   |   |   |   |      payload: bulb 2, R=255, G=0, B=0
 |   |   |   |   length = 4 (little-endian: 0x0004)
 |   |   |   seq = 7

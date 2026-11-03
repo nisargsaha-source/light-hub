@@ -1,6 +1,6 @@
 #include <zephyr/logging/log.h>
 
-#include "uart_rx.h"
+#include "uart_link.h"
 
 LOG_MODULE_REGISTER(main, LOG_LEVEL_INF);
 

@@ -1,5 +1,5 @@
 #pragma once
-
+#define BULB_COUNT 8
 #include <stdint.h>
 
 /* One "set this bulb to this colour" request */
