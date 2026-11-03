@@ -1,0 +1,6 @@
+tests:
+  light_hub.protocol:
+    platform_allow: qemu_riscv32
+    integration_platforms:
+      - qemu_riscv32
+    tags: protocol
