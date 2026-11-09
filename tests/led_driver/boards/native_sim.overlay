@@ -1,0 +1,6 @@
+&i2c0 {
+    home_leds: led-controller@40 {
+        compatible = "lighthub,pca9685-led";
+        reg = <0x40>;
+    };
+};

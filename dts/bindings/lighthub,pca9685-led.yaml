@@ -1,0 +1,5 @@
+description: PCA9685 16-channel PWM chip driving RGB bulbs
+
+compatible: "lighthub,pca9685-led"
+
+include: i2c-device.yaml

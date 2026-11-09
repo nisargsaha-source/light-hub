@@ -1,5 +1,7 @@
 # Oldest CMake version this file is written for
 cmake_minimum_required(VERSION 3.20.0)
+#find the bindings
+list(APPEND DTS_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/../..)
 
 # Pull in Zephyr's build system (kernel, drivers, devicetree, Kconfig).
 # HINTS uses ZEPHYR_BASE if it's set; otherwise CMake finds Zephyr
